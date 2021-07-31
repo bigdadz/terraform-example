@@ -1,15 +1,24 @@
+terraform {
+  required_providers {
+    aws = {
+      source  = "hashicorp/aws"
+      version = "~> 3.0"
+    }
+  }
+}
+
 provider "aws" {
-  access_key = ""
-  secret_key = ""
+  access_key = "<-------paste your aws access key------->"
+  secret_key = "<-------paste your aws secret key------->"
   region     = "ap-southeast-1"
 }
 
 # VPC
 data "aws_availability_zones" "available" {}
-module "datasci_vpc" {
+module "test_vpc" {
   source = "terraform-aws-modules/vpc/aws"
 
-  name = "datasci-vpc"
+  name = "test-vpc"
   cidr = "192.168.0.0/16"
 
   azs             = data.aws_availability_zones.available.names
@@ -22,12 +31,12 @@ module "datasci_vpc" {
 }
 
 # Security Group
-module "datasci_sg" {
+module "test_sg" {
   source = "terraform-aws-modules/security-group/aws"
 
-  name        = "datasci-sg"
+  name        = "test-sg"
   description = "rule for ec2"
-  vpc_id      = module.datasci_vpc.vpc_id
+  vpc_id      = module.test_vpc.vpc_id
 
   ingress_with_cidr_blocks      = [
     {
@@ -72,7 +81,12 @@ data "aws_ami" "ubuntu" {
 
   owners = ["099720109477"] # Canonical
 }
-module "datasci_ec2" {
+
+resource "aws_key_pair" "deployer" {
+  key_name   = "deployer-key"
+  public_key = "<-------paste your public key------->"
+}
+module "test_ec2" {
   source                 = "terraform-aws-modules/ec2-instance/aws"
   version                = "~> 2.0"
 
@@ -81,10 +95,10 @@ module "datasci_ec2" {
 
   ami                    = data.aws_ami.ubuntu.id
   instance_type          = "t2.micro"
-  key_name               = "datasci-keypair"
+  key_name               = aws_key_pair.deployer.key_name
   monitoring             = false
-  vpc_security_group_ids = [module.datasci_sg.this_security_group_id]
-  subnet_id              = module.datasci_vpc.public_subnets[0]
+  vpc_security_group_ids = [module.test_sg.security_group_id]
+  subnet_id              = module.test_vpc.public_subnets[0]
 
   tags = {
     Terraform   = "true"
